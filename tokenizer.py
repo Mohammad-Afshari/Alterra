@@ -3,11 +3,11 @@ from collections import Counter, defaultdict
 from tqdm import tqdm
 
 class SubwordTokenizer:
-    """This is a  subword tokenizer."""
+    """Alterra Subword tokenizer that uses Byte-Pair-Encoding algorithm to tokenize text"""
 
     def __init__(self, regex_rule=None , special_tokens=None, basic_tokens=None):
         self.is_trained = False
-        self.basic_tokens = basic_tokens or list('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz123456789.,;:!?|')
+        self.basic_tokens = basic_tokens or list('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-=.,;:!?|')
         self.regex_rule = regex_rule or re.compile(r'[^a-z123456789\!\?\.\,><]+')
         # self.regex_rule = regex_rule or re.compile(r'[^a-z123456789\.,!\?;\:\-\(\)\[\]\{\}\+\/\\@#\$%\^&\*><]+')
         # r'[^a-z0-9><./,:-]+'
@@ -19,19 +19,20 @@ class SubwordTokenizer:
 
         self.WORD_END = '</w>'
 
-        self.special_tokens = special_tokens or ['<PAD>', '<UNK>']
 
         self.punctation_tokens = {
             '"': '<DOUBLE_COT>',
             "'": '<SINGLE_COT>'
         }
+
+        self.special_tokens = special_tokens or ['<USER_START>', '<USER_END>', '<AI_START>', '<AI_END>', '<COT_START>', '<COT_END>', '<PAD>', '<UNK>', self.WORD_END]
         for punc_tok in self.punctation_tokens.values():
             self.special_tokens.append(punc_tok)
         
 
     # ---------------------------------------------------
 
-    def normalize(self, text):
+    def normalize(self, text:str) -> str:
         for punc_tok in self.punctation_tokens.keys():
             text = text.replace(punc_tok, f' {self.punctation_tokens[punc_tok]} ')
 
@@ -43,7 +44,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
 
-    def is_special_token(self, word):
+    def is_special_token(self, word:str) -> bool:
         if word in self.special_tokens:
             return True
         else:
@@ -51,7 +52,8 @@ class SubwordTokenizer:
 
     # ---------------------------------------------------
 
-    def create_freq_vocab(self, text):
+    def create_freq_vocab(self, text:str) -> dict:
+        """Estimates and returns frequency of each word in a text"""
         words = text.split()
         words_frequency_vocab = Counter(words)
 
@@ -68,8 +70,8 @@ class SubwordTokenizer:
     
     # ---------------------------------------------------
 
-    def get_pairs_freq(self):
-        """Returns every pair of each word in freq_vocab and its frequency."""
+    def get_pairs_freq(self) -> defaultdict:
+        """Returns every pair of each word in freq_vocab and their frequency."""
         pairs = defaultdict(int)
         for word, freq in self.freq_vocab.items():
             letters = word
@@ -80,7 +82,7 @@ class SubwordTokenizer:
     
     # ---------------------------------------------------
     
-    def merge_vocab(self, pair):
+    def merge_vocab(self, pair:tuple) -> dict:
         """merges the given pair(here:most frequent pair) with every word in freq_vocab (if pair exist in freq_vocab words)
         and returns a new freq_vocab that its words contain pairs instead letters"""
 
@@ -101,27 +103,14 @@ class SubwordTokenizer:
                     new_word.append(letters[i])
                     i += 1
             new_freq_vocab[tuple(new_word)] = freq
+
         return new_freq_vocab
 
     # ---------------------------------------------------
 
-    def create_merge_rules(self, num_merges=None):
-        """It is generally not advisable to continue with the least frequent pair merging repeatedly.
-        Therefore, you should avoid setting a very high number of merges and specifying an excessively large value for num_merge_rules.
-        If you have no idea how to set the num_merges, set num_merges to zero ; the code will intelligently determine the required num_merges on its own
-        \nNOTE: THIS FUNCTION CAN BE USED FOR ONLY ONE TIMES. THEREFORE TOKENIZER CAN BE TRAINED FOR ONLY ONE TIMES"""
-
-
-        if num_merges == 0:
-            import statistics
-            num_merges = int(statistics.mean(list(self.freq_vocab.values())) * 100)
-            # num_merges = int(statistics.mode(list(self.freq_vocab.values())))
-            # num_merges = int(statistics.median(list(self.freq_vocab.values())))
-            print(f'num_merges will be {num_merges}')
-
+    def create_merge_rules(self, num_merges:int):
         merge_rules = []
 
-        print('>> Merging pairs with frequncy vocab...')
         for i in tqdm(range(num_merges)):
             pairs = self.get_pairs_freq()
             if not pairs:
@@ -138,13 +127,15 @@ class SubwordTokenizer:
 
     # ---------------------------------------------------
 
-    def build_token_id_mapping(self):
+    def build_token_id_mapping(self) -> None:
         vocab = []
+        vocab.extend(self.WORD_END)
         vocab.extend(self.special_tokens)
         vocab.extend(self.basic_tokens)
 
-        for pair in self.merge_rules:
-            vocab.append(''.join(pair))
+        if self.merge_rules:
+            for pair in self.merge_rules:
+                vocab.append(''.join(pair))
 
         token_to_id = {}
         id_to_token = {}
@@ -158,23 +149,50 @@ class SubwordTokenizer:
 
     # ---------------------------------------------------
     
-    def get_vocab_size(self):
+    def get_vocab_size(self) -> int:
         if self.is_trained:
             return len(list(self.id_to_token.values()))
         else:
-            return 0
+            return len(self.special_tokens + self.basic_tokens)
 
 
     # ---------------------------------------------------
     
-    def fit(self, text_to_fit, num_merge_rules):
-        if not self.is_trained:
-            text_to_fit = self.normalize(text_to_fit)
-            self.create_freq_vocab(text_to_fit)
-            self.create_merge_rules(num_merge_rules)
-            self.build_token_id_mapping()
+    def fit(self, text_to_fit:str, num_merge_rules:int) -> None:
+        """WARNING: It is generally not advisable to continue with the least frequent pair merging repeatedly.
+        Therefore, you should avoid setting a very high number of merges and specifying an excessively large value for num_merge_rules.
+        If you have no idea how to set the num_merges, set num_merges to -1 ; the code will intelligently determine the required num_merges on its own
+        \nNOTE: THIS FUNCTION CAN BE USED FOR ONLY ONE TIME; THEREFORE TOKENIZER IS ONE-TIME-TRAINABLE"""
 
-            self.is_trained = True
+        if not self.is_trained:
+
+            if num_merge_rules == 0:
+                text_to_fit = self.normalize(text_to_fit)
+                self.create_freq_vocab(text_to_fit)
+                self.build_token_id_mapping()
+
+                self.is_trained = True
+
+            elif num_merge_rules == -1:
+                import statistics
+                num_merges = int(statistics.mean(list(self.freq_vocab.values())) * 100)
+                # num_merges = int(statistics.mode(list(self.freq_vocab.values())))
+                # num_merges = int(statistics.median(list(self.freq_vocab.values())))
+                print(f'num_merges will be {num_merges}')
+                
+                text_to_fit = self.normalize(text_to_fit)
+                self.create_freq_vocab(text_to_fit)
+                self.create_merge_rules(num_merge_rules)
+                self.build_token_id_mapping()
+
+                self.is_trained = True
+
+            else:
+                self.create_freq_vocab(text_to_fit)
+                self.create_merge_rules(num_merge_rules)
+                self.build_token_id_mapping()
+
+                self.is_trained = True
             
         else:
             raise ValueError(
@@ -185,9 +203,9 @@ class SubwordTokenizer:
 
     # ---------------------------------------------------
 
-    def reset(self):
+    def reset(self) -> None:
         self.special_tokens = ['<PAD>', '<UNK>', '</w>']
-        self.basic_tokens = list('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz123456789.,;:')
+        self.basic_tokens = list('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:')
         self.regex_rule = re.compile(r'[^a-z123456789\!\?\.\,><]+')
         
         self.freq_vocab= None
@@ -200,33 +218,40 @@ class SubwordTokenizer:
 
     # ---------------------------------------------------
 
-    def tokenize_word(self, word) -> list:
+    def tokenize_word(self, word:str) -> list:
         """Split a word into subword token strings (always a list)."""
         letters = list(word)
         letters.append(self.WORD_END)
 
-        current_tokens = letters
 
-        for pair in self.merge_rules:
-            i=0
+        if self.merge_rules:
+            current_tokens = letters
 
-            new_tokens = []
+            for pair in self.merge_rules:
+                i=0
 
-            while i < len(current_tokens):
-                if ( i+1 < len(current_tokens) ) and ( pair == (current_tokens[i], current_tokens[i+1]) ):
-                    new_tokens.append("".join(pair))
-                    i+=2
-                else:
-                    new_tokens.append(current_tokens[i])
-                    i+=1
+                new_tokens = []
 
-            current_tokens = new_tokens
+                while i < len(current_tokens):
+                    if ( i+1 < len(current_tokens) ) and ( pair == (current_tokens[i], current_tokens[i+1]) ):
+                        new_tokens.append("".join(pair))
+                        i+=2
+                    else:
+                        new_tokens.append(current_tokens[i])
+                        i+=1
 
-        return current_tokens
+                current_tokens = new_tokens
+            return current_tokens
+
+        else:
+            return letters
+            
+                
+
         
     # ---------------------------------------------------
     
-    def tokenize_text(self, text):
+    def tokenize_text(self, text:str) -> list:
         """Split text into subword token strings (always a list)."""
         if not text:
             return []
@@ -244,22 +269,19 @@ class SubwordTokenizer:
 
     # ---------------------------------------------------
 
-    def encode(self, text):
+    def encode(self, text:str) -> list:
         tokens = self.tokenize_text(text)
 
         token_ids = []
 
         for token in tokens:
-            if str(token) in self.token_to_id or token in self.special_tokens:
-                token_ids.append( self.token_to_id[str(token)] )
-            else: 
-                token_ids.append( self.token_to_id['<UNK>'] )
+            token_ids.append( self.token_to_id[str(token)] )
 
         return token_ids
 
     # ---------------------------------------------------
 
-    def decode(self, id_array) -> str:
+    def decode(self, id_array:list) -> str:
         tokens = []
         for id in id_array:
             tokens.append( self.id_to_token[id] )
@@ -273,7 +295,7 @@ class SubwordTokenizer:
 
     # ---------------------------------------------------
 
-    def save_configs(self, path):
+    def save_configs(self, save_path:str, save_name:str) -> None:
         import json
 
         configs = {
@@ -287,15 +309,15 @@ class SubwordTokenizer:
             "WORD_END": self.WORD_END
         }
 
-        with open(f"{path}/tokenizer_configs.json", 'w', encoding='utf-8') as f:
+        with open(f"{save_path}/{save_name}.json", 'w', encoding='utf-8') as f:
             json.dump(configs, f, ensure_ascii=False, indent=4)
 
 
     # ---------------------------------------------------
 
-    def load_configs(self, config_file_path):
+    def load_configs(self, file_path:str) -> None:
         import json
-        with open(config_file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             configs = json.load(f)
 
         self.special_tokens = configs["special_tokens"]
@@ -309,7 +331,7 @@ class SubwordTokenizer:
         self.token_to_id = configs["token_to_id"]
 
         self.is_trained = bool(configs["is_trained"])
-        self.WORD_ENDc = configs["WORD_END"]
+        self.WORD_END = configs["WORD_END"]
         # restore regex
         import re
         self.regex_rule = re.compile(configs["regex_rule"])
