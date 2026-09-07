@@ -23,6 +23,7 @@ class FeedForward(nn.Module):
 class AttentionHead(nn.Module):
     def __init__(self, n_embed, window_size, head_size, dropout_value):
         super().__init__()
+        self.head_size = head_size
         self.key = nn.Linear(n_embed, head_size, bias=False)
         self.value = nn.Linear(n_embed, head_size, bias=False)
         self.query = nn.Linear(n_embed, head_size, bias=False)
@@ -36,7 +37,7 @@ class AttentionHead(nn.Module):
         k = self.key(x)
         q = self.query(x)
 
-        wei = q @ k.transpose(-2, -1) * C**-0.5 # attention scores
+        wei = q @ k.transpose(-2, -1) * self.head_size **-0.5 # attention scores
         wei = wei.masked_fill(self.tril[:T,:T] ==0, float('-inf')) # applying the masking
         wei = F.softmax(wei, dim=-1)
         wei = self.dropout(wei)
@@ -123,9 +124,10 @@ class TransformerModel(nn.Module):
             # focus only on the last time step
             logits = logits[:, -1, :]  # becomes (B, C)
             # apply softmax to get probabilities
-            probs = F.softmax(logits, dim=-1)  # (B, C)
+            # probs = F.softmax(logits, dim=-1)  # (B, C)
             # sample from the distribution
-            idx_next = torch.multinomial(probs, num_samples=1)  # (B, 1)
+            # idx_next = torch.multinomial(probs, num_samples=1)  # (B, 1)
+            idx_next = torch.argmax(logits,dim=-1, keepdim=True)  # (B, 1)
             # append sampled index to the running sequence
             idx = torch.cat((idx, idx_next), dim=1)  # (B, T+1)
         return idx
