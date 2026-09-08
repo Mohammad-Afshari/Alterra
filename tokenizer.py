@@ -8,9 +8,7 @@ class SubwordTokenizer:
     def __init__(self, regex_rule=None , special_tokens=None, basic_tokens=None):
         self.is_trained = False
         self.basic_tokens = basic_tokens or list('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-=.,;:!?|')
-        self.regex_rule = regex_rule or re.compile(r'[^a-z123456789\!\?\.\,><]+')
-        # self.regex_rule = regex_rule or re.compile(r'[^a-z123456789\.,!\?;\:\-\(\)\[\]\{\}\+\/\\@#\$%\^&\*><]+')
-        # r'[^a-z0-9><./,:-]+'
+        self.regex_rule = regex_rule or re.compile(r'[^a-z123456789\!\?\.\:\;\'\=\-\|\,\>\<\]+')
 
         self.freq_vocab= None
         self.merge_rules = None
@@ -19,10 +17,9 @@ class SubwordTokenizer:
 
         self.WORD_END = '</w>'
 
-
         self.punctation_tokens = {
-            '"': '<DOUBLE_COT>',
-            "'": '<SINGLE_COT>'
+            '"': '<DOUBLE_QUOT>',
+            "'": '<SINGLE_QUOT>'
         }
 
         self.special_tokens = special_tokens or ['<USER_START>', '<USER_END>', '<AI_START>', '<AI_END>', '<COT_START>', '<COT_END>', '<PAD>', '<UNK>', self.WORD_END]
@@ -33,6 +30,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def normalize(self, text:str) -> str:
+        """This function cleans and organizes the given text, removes unwanted and unnecessary characters, and delivers it in the requested format."""
         for punc_tok in self.punctation_tokens.keys():
             text = text.replace(punc_tok, f' {self.punctation_tokens[punc_tok]} ')
 
@@ -45,6 +43,7 @@ class SubwordTokenizer:
 
 
     def is_special_token(self, word:str) -> bool:
+        """Indicates whether a token is special, using a boolean value."""
         if word in self.special_tokens:
             return True
         else:
@@ -53,7 +52,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def create_freq_vocab(self, text:str) -> dict:
-        """Estimates and returns frequency of each word in a text"""
+        """Estimates frequency of each word in the given text and saves it in a dictionary form to SubwordTokenizer.freq_vocab ."""
         words = text.split()
         words_frequency_vocab = Counter(words)
 
@@ -71,7 +70,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def get_pairs_freq(self) -> defaultdict:
-        """Returns every pair of each word in freq_vocab and their frequency."""
+        """Returns every pair of each word in SubwordTokenizer.freq_vocab and their frequency in a dictionary form."""
         pairs = defaultdict(int)
         for word, freq in self.freq_vocab.items():
             letters = word
@@ -83,10 +82,10 @@ class SubwordTokenizer:
     # ---------------------------------------------------
     
     def merge_vocab(self, pair:tuple) -> dict:
-        """merges the given pair(here:most frequent pair) with every word in freq_vocab (if pair exist in freq_vocab words)
-        and returns a new freq_vocab that its words contain pairs instead letters"""
+        """Merges the given pair(here:most frequent pair) with every word in freq_vocab if pair exist in letters of that word
+        and returns a new freq_vocab that it's words contain pairs instead of just letters"""
 
-        new_freq_vocab = {} # new vocab that shows the frequency of each word that contains most used pairs
+        new_freq_vocab = {} # new vocab that shows the frequency of each word and it's letters are replaced by pairs
         pair_text = ''.join(pair)
 
         for word, freq in self.freq_vocab.items():
@@ -108,14 +107,15 @@ class SubwordTokenizer:
 
     # ---------------------------------------------------
 
-    def create_merge_rules(self, num_merges:int):
+    def create_merge_rules(self, num_merges:int) -> None:
+        """Merges most frequent pairs with SubwordTokenizer.freq_vocab words for num_merges times."""
         merge_rules = []
 
         for i in tqdm(range(num_merges)):
             pairs = self.get_pairs_freq()
             if not pairs:
-                print('>> There is no pairs left.')
                 break
+
             most_frequent_pair = max(pairs, key=pairs.get) # the most frequent pair in the pairs of all words
             self.freq_vocab = self.merge_vocab(most_frequent_pair)
             merge_rules.append(most_frequent_pair)
@@ -123,11 +123,10 @@ class SubwordTokenizer:
         if len(merge_rules) != 0:
             self.merge_rules = merge_rules
 
-        print(f'>> Merging is over. total merge rules:{len(self.merge_rules)}')
-
     # ---------------------------------------------------
 
     def build_token_id_mapping(self) -> None:
+        """Assigns a unique ID to each token of vocabulary and saves them in dictionary format in SubwordTokenizer.token_to_id & SubwordTokenizer.id_to_token"""
         vocab = []
         vocab.extend(self.WORD_END)
         vocab.extend(self.special_tokens)
@@ -150,6 +149,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
     
     def get_vocab_size(self) -> int:
+        """Returns the size of vocabulary."""
         if self.is_trained:
             return len(list(self.id_to_token.values()))
         else:
@@ -159,10 +159,10 @@ class SubwordTokenizer:
     # ---------------------------------------------------
     
     def fit(self, text_to_fit:str, num_merge_rules:int) -> None:
-        """WARNING: It is generally not advisable to continue with the least frequent pair merging repeatedly.
-        Therefore, you should avoid setting a very high number of merges and specifying an excessively large value for num_merge_rules.
-        If you have no idea how to set the num_merges, set num_merges to -1 ; the code will intelligently determine the required num_merges on its own
-        \nNOTE: THIS FUNCTION CAN BE USED FOR ONLY ONE TIME; THEREFORE TOKENIZER IS ONE-TIME-TRAINABLE"""
+        """This function trains the tokenizer with the given text.\n
+        Set num_merge_rules to: -1 to let tokenizer decide the num_merges, 0 to set tokenizer to character based mode, or an integer:num_merge_rules to train tokenizer for num_merge_rules times.\n
+        NOTE: It is generally not advisable to continue with the least frequent pair merging repeatedly.Therefore, you should avoid setting a very high number of merges and specifying an excessively large value for num_merge_rules.\n
+        WARNING: THIS FUNCTION CAN BE USED FOR ONLY ONE TIME; THEREFORE TOKENIZER IS ONE-TIME-TRAINABLE."""
 
         if not self.is_trained:
 
@@ -204,6 +204,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def reset(self) -> None:
+        """Resets tokenizer parameters to the default and makes it trainable again."""
         self.special_tokens = ['<PAD>', '<UNK>', '</w>']
         self.basic_tokens = list('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:')
         self.regex_rule = re.compile(r'[^a-z123456789\!\?\.\,><]+')
@@ -219,7 +220,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def tokenize_word(self, word:str) -> list:
-        """Split a word into subword token strings (always a list)."""
+        """Breaks the given word into subword token strings"""
         letters = list(word)
         letters.append(self.WORD_END)
 
@@ -246,13 +247,11 @@ class SubwordTokenizer:
         else:
             return letters
             
-                
-
         
     # ---------------------------------------------------
     
     def tokenize_text(self, text:str) -> list:
-        """Split text into subword token strings (always a list)."""
+        """Breaks the given text into subword token strings."""
         if not text:
             return []
 
@@ -270,6 +269,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def encode(self, text:str) -> list:
+        """Converts(decodes) the given text into token IDs that can be used for input of model."""
         tokens = self.tokenize_text(text)
 
         token_ids = []
@@ -281,9 +281,10 @@ class SubwordTokenizer:
 
     # ---------------------------------------------------
 
-    def decode(self, id_array:list) -> str:
+    def decode(self, token_ids:list) -> str:
+        """Converts(encodes) the given token IDs to readable text."""
         tokens = []
-        for id in id_array:
+        for id in token_ids:
             tokens.append( self.id_to_token[id] )
 
         tokens = "".join(tokens)
@@ -296,6 +297,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def save_configs(self, save_path:str, save_name:str) -> None:
+        """Saves the tokenizer configs and parametes in a json file in the given save path."""
         import json
 
         configs = {
@@ -316,6 +318,7 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def load_configs(self, file_path:str) -> None:
+        """Loads the tokenizer configs and parameters from the given json file."""
         import json
         with open(file_path, 'r', encoding='utf-8') as f:
             configs = json.load(f)
