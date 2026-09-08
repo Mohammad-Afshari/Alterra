@@ -1,37 +1,41 @@
 import re
 from collections import Counter, defaultdict
 from tqdm import tqdm
+import json
 
-class SubwordTokenizer:
-    """Alterra Subword tokenizer that uses Byte-Pair-Encoding algorithm to tokenize text"""
+class Tokenizer:
+    """A configurable tokenizer supporting BPE and character-level tokenization."""
 
-    def __init__(self, regex_rule=None , special_tokens=None, basic_tokens=None):
-        self.is_trained = False
-        self.allowed_chars = """ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-=<>'".,;:!?|"""
-        self.basic_tokens = basic_tokens or list(self.allowed_chars)
-        self.regex_rule = regex_rule or re.compile(f'[^{re.escape(self.allowed_chars)}]')
+    def __init__(self, regex_rule:any=None , special_tokens:list=None, allowed_chars:list=None):
 
-        self.freq_vocab= None
-        self.merge_rules = None
-        self.token_to_id = None
-        self.id_to_token = None
-
+        # CONFIGURATIONS
+        self.allowed_chars = allowed_chars or list("""ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:()[]{}<>+-=*/!?"'~#%&_$""")
+        self.regex_rule = regex_rule or re.compile(f'[^{re.escape( ''.join(self.allowed_chars) )}]')
         self.WORD_END = '</w>'
-
+        self.special_tokens = special_tokens or ['<USER_START>', '<USER_END>', '<AI_START>', '<AI_END>', '<COT_START>', '<COT_END>', '<PAD>', '<UNK>', self.WORD_END]
         self.punctation_tokens = {
             '"': '<DOUBLE_QUOT>',
             "'": '<SINGLE_QUOT>'
         }
-
-        self.special_tokens = special_tokens or ['<USER_START>', '<USER_END>', '<AI_START>', '<AI_END>', '<COT_START>', '<COT_END>', '<PAD>', '<UNK>', self.WORD_END]
         for punc_tok in self.punctation_tokens.values():
             self.special_tokens.append(punc_tok)
+
+        # PARAMETERS
+        self.freq_vocab= None
+        self.merge_rules = None
+        self.token_to_id = None
+        self.id_to_token = None
+        self.is_trained = False
+
+
+
         
 
     # ---------------------------------------------------
 
     def normalize(self, text:str) -> str:
         """This function cleans and organizes the given text, removes unwanted and unnecessary characters, and delivers it in the requested format."""
+
         # for punc_tok in self.punctation_tokens.keys():
             # text = text.replace(punc_tok, f' {self.punctation_tokens[punc_tok]} ')
 
@@ -44,6 +48,7 @@ class SubwordTokenizer:
 
     def is_special_token(self, word:str) -> bool:
         """Indicates whether a token is special, using a boolean value."""
+
         if word in self.special_tokens:
             return True
         else:
@@ -52,7 +57,8 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def create_freq_vocab(self, text:str) -> dict:
-        """Estimates frequency of each word in the given text and saves it in a dictionary form to SubwordTokenizer.freq_vocab ."""
+        """Estimates frequency of each word in the given text and saves it in a dictionary form to Tokenizer.freq_vocab ."""
+
         words = text.split()
         words_frequency_vocab = Counter(words)
 
@@ -70,7 +76,8 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def get_pairs_freq(self) -> defaultdict:
-        """Returns every pair of each word in SubwordTokenizer.freq_vocab and their frequency in a dictionary form."""
+        """Returns every pair of each word in Tokenizer.freq_vocab and their frequency in a dictionary form."""
+
         pairs = defaultdict(int)
         for word, freq in self.freq_vocab.items():
             letters = word
@@ -108,7 +115,8 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def create_merge_rules(self, num_merges:int) -> None:
-        """Merges most frequent pairs with SubwordTokenizer.freq_vocab words for num_merges times."""
+        """Merges most frequent pairs with Tokenizer.freq_vocab words for num_merges times."""
+
         merge_rules = []
 
         for i in tqdm(range(num_merges)):
@@ -126,11 +134,12 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def build_token_id_mapping(self) -> None:
-        """Assigns a unique ID to each token of vocabulary and saves them in dictionary format in SubwordTokenizer.token_to_id & SubwordTokenizer.id_to_token"""
+        """Assigns a unique ID to each token of vocabulary and saves them in dictionary format in Tokenizer.token_to_id & Tokenizer.id_to_token"""
+
         vocab = []
         vocab.extend(self.WORD_END)
         vocab.extend(self.special_tokens)
-        vocab.extend(self.basic_tokens)
+        vocab.extend(self.allowed_chars)
 
         if self.merge_rules:
             for pair in self.merge_rules:
@@ -150,10 +159,11 @@ class SubwordTokenizer:
     
     def get_vocab_size(self) -> int:
         """Returns the size of vocabulary."""
+
         if self.is_trained:
             return len(list(self.id_to_token.values()))
         else:
-            return len(self.special_tokens + self.basic_tokens)
+            return len(self.special_tokens + self.allowed_chars)
 
 
     # ---------------------------------------------------
@@ -197,29 +207,25 @@ class SubwordTokenizer:
             raise ValueError(
                 "Tokenizer has already been trained! "
                 "You cannot retrain a tokenizer that is already fitted. "
-                "Please create a new instance of the tokenizer or reset it using reset() function."
+                "Please create a new instance of the tokenizer or reset it by calling Tokenizer.reset() function."
             )
 
     # ---------------------------------------------------
 
     def reset(self) -> None:
-        """Resets tokenizer parameters to the default and makes it trainable again."""
-        self.special_tokens = ['<PAD>', '<UNK>', '</w>']
-        self.basic_tokens = list('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:')
-        self.regex_rule = re.compile(r'[^a-z123456789\!\?\.\,><]+')
-        
+        """Resets tokenizer parameters to default and makes it trainable again (congigurations will not be reset)."""
+
         self.freq_vocab= None
         self.merge_rules = None
         self.token_to_id = None
         self.id_to_token = None
-
-        self.WORD_END = '</w>'
         self.is_trained = False
 
     # ---------------------------------------------------
 
     def tokenize_word(self, word:str) -> list:
         """Breaks the given word into subword token strings"""
+
         letters = list(word)
         letters.append(self.WORD_END)
 
@@ -251,6 +257,7 @@ class SubwordTokenizer:
     
     def tokenize_text(self, text:str) -> list:
         """Breaks the given text into subword token strings."""
+
         if not text:
             return []
 
@@ -269,6 +276,7 @@ class SubwordTokenizer:
 
     def encode(self, text:str) -> list:
         """Converts(decodes) the given text into token IDs that can be used for input of model."""
+
         tokens = self.tokenize_text(text)
 
         token_ids = []
@@ -282,6 +290,7 @@ class SubwordTokenizer:
 
     def decode(self, token_ids:list) -> str:
         """Converts(encodes) the given token IDs to readable text."""
+
         tokens = []
         for id in token_ids:
             tokens.append( self.id_to_token[id] )
@@ -296,12 +305,11 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def save_configs(self, save_path:str, save_name:str) -> None:
-        """Saves the tokenizer configs and parametes in a json file in the given save path."""
-        import json
+        """Saves the tokenizer configurations and parametes in a json file in the given save path."""
 
         configs = {
             "is_trained": str(self.is_trained),
-            "basic_tokens": self.basic_tokens,
+            "allowed_chars": self.allowed_chars,
             "regex_rule": self.regex_rule.pattern,
 
             "merge_rules": [list(pair) for pair in self.merge_rules],   # convert tuple -> list
@@ -320,14 +328,13 @@ class SubwordTokenizer:
     # ---------------------------------------------------
 
     def load_configs(self, file_path:str) -> None:
-        """Loads the tokenizer configs and parameters from the given json file."""
-        import json
-        import re
+        """Loads the tokenizer configurations and parameters from the given json file."""
+
         with open(file_path, 'r', encoding='utf-8') as f:
             configs = json.load(f)
 
         self.is_trained = bool(configs["is_trained"])
-        self.basic_tokens = configs["basic_tokens"]
+        self.allowed_chars = configs["allowed_chars"]
         self.regex_rule = re.compile(configs["regex_rule"])
 
         # convert lists → tuples
