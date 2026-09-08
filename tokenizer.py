@@ -7,8 +7,9 @@ class SubwordTokenizer:
 
     def __init__(self, regex_rule=None , special_tokens=None, basic_tokens=None):
         self.is_trained = False
-        self.basic_tokens = basic_tokens or list('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-=.,;:!?|')
-        self.regex_rule = regex_rule or re.compile(r'[^a-z123456789\!\?\.\:\;\'\=\-\|\,\>\<\]+')
+        self.allowed_chars = """ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-=<>'".,;:!?|"""
+        self.basic_tokens = basic_tokens or list(self.allowed_chars)
+        self.regex_rule = regex_rule or re.compile(f'[^{re.escape(self.allowed_chars)}]')
 
         self.freq_vocab= None
         self.merge_rules = None
@@ -31,12 +32,11 @@ class SubwordTokenizer:
 
     def normalize(self, text:str) -> str:
         """This function cleans and organizes the given text, removes unwanted and unnecessary characters, and delivers it in the requested format."""
-        for punc_tok in self.punctation_tokens.keys():
-            text = text.replace(punc_tok, f' {self.punctation_tokens[punc_tok]} ')
+        # for punc_tok in self.punctation_tokens.keys():
+            # text = text.replace(punc_tok, f' {self.punctation_tokens[punc_tok]} ')
 
-        # text = re.sub(self.regex_rule, ' ', text)
-        # text = re.sub(r'\s+', ' ', text)
-        # return text.strip()
+        text = self.regex_rule.sub(' ', text)
+
         return text
     
     # ---------------------------------------------------
@@ -165,9 +165,9 @@ class SubwordTokenizer:
         WARNING: THIS FUNCTION CAN BE USED FOR ONLY ONE TIME; THEREFORE TOKENIZER IS ONE-TIME-TRAINABLE."""
 
         if not self.is_trained:
+            text_to_fit = self.normalize(text_to_fit)
 
             if num_merge_rules == 0:
-                text_to_fit = self.normalize(text_to_fit)
                 self.create_freq_vocab(text_to_fit)
                 self.build_token_id_mapping()
 
@@ -179,8 +179,7 @@ class SubwordTokenizer:
                 # num_merges = int(statistics.mode(list(self.freq_vocab.values())))
                 # num_merges = int(statistics.median(list(self.freq_vocab.values())))
                 print(f'num_merges will be {num_merges}')
-                
-                text_to_fit = self.normalize(text_to_fit)
+
                 self.create_freq_vocab(text_to_fit)
                 self.create_merge_rules(num_merge_rules)
                 self.build_token_id_mapping()
@@ -301,14 +300,17 @@ class SubwordTokenizer:
         import json
 
         configs = {
-            "special_tokens": self.special_tokens,
+            "is_trained": str(self.is_trained),
             "basic_tokens": self.basic_tokens,
+            "regex_rule": self.regex_rule.pattern,
+
             "merge_rules": [list(pair) for pair in self.merge_rules],   # convert tuple -> list
             "token_to_id": self.token_to_id,
             "id_to_token": {str(k): v for k, v in self.id_to_token.items()},  # convert keys -> string
-            "regex_rule": self.regex_rule.pattern,
-            "is_trained": str(self.is_trained),
-            "WORD_END": self.WORD_END
+
+            "WORD_END": self.WORD_END,
+            "special_tokens": self.special_tokens,
+            "punctation_tokens": self.punctation_tokens
         }
 
         with open(f"{save_path}/{save_name}.json", 'w', encoding='utf-8') as f:
@@ -320,21 +322,20 @@ class SubwordTokenizer:
     def load_configs(self, file_path:str) -> None:
         """Loads the tokenizer configs and parameters from the given json file."""
         import json
+        import re
         with open(file_path, 'r', encoding='utf-8') as f:
             configs = json.load(f)
 
-        self.special_tokens = configs["special_tokens"]
+        self.is_trained = bool(configs["is_trained"])
         self.basic_tokens = configs["basic_tokens"]
+        self.regex_rule = re.compile(configs["regex_rule"])
 
         # convert lists → tuples
         self.merge_rules = [tuple(pair) for pair in configs["merge_rules"]]
-
-        # restore int keys
-        self.id_to_token = {int(k): v for k, v in configs["id_to_token"].items()}
         self.token_to_id = configs["token_to_id"]
+        self.id_to_token = {int(k): v for k, v in configs["id_to_token"].items()}
 
-        self.is_trained = bool(configs["is_trained"])
+
         self.WORD_END = configs["WORD_END"]
-        # restore regex
-        import re
-        self.regex_rule = re.compile(configs["regex_rule"])
+        self.special_tokens = configs["special_tokens"]
+        self.punctation_tokens = configs["punctation_tokens"]
