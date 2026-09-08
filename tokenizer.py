@@ -28,9 +28,6 @@ class Tokenizer:
         self.is_trained = False
 
 
-
-        
-
     # ---------------------------------------------------
 
     def normalize(self, text:str) -> str:
@@ -137,9 +134,8 @@ class Tokenizer:
         """Assigns a unique ID to each token of vocabulary and saves them in dictionary format in Tokenizer.token_to_id & Tokenizer.id_to_token"""
 
         vocab = []
-        vocab.extend(self.WORD_END)
-        vocab.extend(self.special_tokens)
-        vocab.extend(self.allowed_chars)
+        vocab += self.special_tokens
+        vocab += self.allowed_chars
 
         if self.merge_rules:
             for pair in self.merge_rules:
@@ -177,8 +173,13 @@ class Tokenizer:
         if not self.is_trained:
             text_to_fit = self.normalize(text_to_fit)
 
+            if not isinstance(num_merge_rules, int):
+                raise TypeError("num_merge_rules must be an integer.")
+
+            if num_merge_rules < -1:
+                raise ValueError("num_merge_rules mus be -1, 0, or a positive integer.")
+
             if num_merge_rules == 0:
-                self.create_freq_vocab(text_to_fit)
                 self.build_token_id_mapping()
 
                 self.is_trained = True
@@ -191,17 +192,18 @@ class Tokenizer:
                 print(f'num_merges will be {num_merges}')
 
                 self.create_freq_vocab(text_to_fit)
-                self.create_merge_rules(num_merge_rules)
+                self.create_merge_rules(num_merges)
                 self.build_token_id_mapping()
 
                 self.is_trained = True
 
-            else:
+            elif num_merge_rules <= 1:
                 self.create_freq_vocab(text_to_fit)
                 self.create_merge_rules(num_merge_rules)
                 self.build_token_id_mapping()
 
                 self.is_trained = True
+
             
         else:
             raise ValueError(
@@ -305,10 +307,13 @@ class Tokenizer:
     # ---------------------------------------------------
 
     def save_configs(self, save_path:str, save_name:str) -> None:
-        """Saves the tokenizer configurations and parametes in a json file in the given save path."""
+        """Saves the tokenizer configurations and parametes in a json file in the given save path if it is not trained."""
 
+        if not self.is_trained:
+            raise ValueError("Tokenizer must be trained first to save it.")
+        
         configs = {
-            "is_trained": str(self.is_trained),
+            "is_trained": self.is_trained,
             "allowed_chars": self.allowed_chars,
             "regex_rule": self.regex_rule.pattern,
 
@@ -333,7 +338,7 @@ class Tokenizer:
         with open(file_path, 'r', encoding='utf-8') as f:
             configs = json.load(f)
 
-        self.is_trained = bool(configs["is_trained"])
+        self.is_trained = configs["is_trained"]
         self.allowed_chars = configs["allowed_chars"]
         self.regex_rule = re.compile(configs["regex_rule"])
 
