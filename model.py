@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import math
 torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
 from tqdm import tqdm
 
@@ -19,6 +20,23 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, n_embed, window_size, dropout):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        position = torch.arange(window_size).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, n_embed, 2) * (-math.log(10000.0) / n_embed))
+        pe = torch.zeros(window_size, 1, n_embed)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = self.pe[:x.size(0)]
+        return self.dropout(x)
 
 class AttentionHead(nn.Module):
     def __init__(self, n_embed, window_size, head_size, dropout_value):
@@ -87,7 +105,8 @@ class TransformerModel(nn.Module):
         self.window_size = window_size
 
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
-        self.position_embedding_table = nn.Embedding(window_size, n_embed)
+        # self.position_embedding_table = nn.Embedding(window_size, n_embed)
+        self.positional_encoding_table = PositionalEncoding(n_embed, window_size, dropout_value)
         self.blocks = nn.Sequential(*[Block(n_embed, num_heads, window_size, head_size, dropout_value) for _ in range(num_transformer_blocks)])
         self.ln_f = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size)
@@ -97,8 +116,9 @@ class TransformerModel(nn.Module):
         
         # idx and targets are both (B,T) tensors
         tok_emb = self.token_embedding_table(idx) # (B,T,C) 
-        pos_emb = self.position_embedding_table(torch.arange(T))
-        x = tok_emb + pos_emb
+        # pos_emb = self.position_embedding_table(torch.arange(T))
+        pos_enc = self.positional_encoding_table(idx)
+        x = tok_emb + pos_enc
         x = self.blocks(x)
         logits = self.lm_head(x) #(B,T,vocab_size)
         
