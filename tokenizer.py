@@ -12,7 +12,7 @@ class Tokenizer:
         self.allowed_chars = allowed_chars or list("""ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:()[]{}<>+-=*/!?"'~#%&_$""")
         self.regex_rule = regex_rule or re.compile(f'[^{re.escape( ''.join(self.allowed_chars) )}]')
         self.WORD_END = '</w>'
-        self.special_tokens = special_tokens or ['<USER_START>', '<USER_END>', '<AI_START>', '<AI_END>', '<COT_START>', '<COT_END>', '<PAD>', '<UNK>', self.WORD_END]
+        self.special_tokens = special_tokens or ['<USER_START>', '<USER_END>', '<AI_START>', '<AI_END>', '<CHAT_START>', '<CHAT_END>', '<COT_START>', '<COT_END>', '<PAD>', '<UNK>', self.WORD_END]
         self.punctation_tokens = {
             '"': '<DOUBLE_QUOT>',
             "'": '<SINGLE_QUOT>'
@@ -27,9 +27,6 @@ class Tokenizer:
         self.id_to_token = None
         self.is_trained = False
 
-
-    # ---------------------------------------------------
-
     def normalize(self, text:str) -> str:
         """This function cleans and organizes the given text, removes unwanted and unnecessary characters, and delivers it in the requested format."""
 
@@ -39,9 +36,6 @@ class Tokenizer:
         text = self.regex_rule.sub(' ', text)
 
         return text
-    
-    # ---------------------------------------------------
-
 
     def is_special_token(self, word:str) -> bool:
         """Indicates whether a token is special, using a boolean value."""
@@ -50,9 +44,7 @@ class Tokenizer:
             return True
         else:
             return False
-
-    # ---------------------------------------------------
-
+    
     def create_freq_vocab(self, text:str) -> dict:
         """Estimates frequency of each word in the given text and saves it in a dictionary form to Tokenizer.freq_vocab ."""
 
@@ -70,8 +62,6 @@ class Tokenizer:
 
             self.freq_vocab = freq_vocab
     
-    # ---------------------------------------------------
-
     def get_pairs_freq(self) -> defaultdict:
         """Returns every pair of each word in Tokenizer.freq_vocab and their frequency in a dictionary form."""
 
@@ -82,9 +72,7 @@ class Tokenizer:
                 pairs[letters[i], letters[i+1]] += freq
 
         return pairs
-    
-    # ---------------------------------------------------
-    
+
     def merge_vocab(self, pair:tuple) -> dict:
         """Merges the given pair(here:most frequent pair) with every word in freq_vocab if pair exist in letters of that word
         and returns a new freq_vocab that it's words contain pairs instead of just letters"""
@@ -109,8 +97,6 @@ class Tokenizer:
 
         return new_freq_vocab
 
-    # ---------------------------------------------------
-
     def create_merge_rules(self, num_merges:int) -> None:
         """Merges most frequent pairs with Tokenizer.freq_vocab words for num_merges times."""
 
@@ -127,8 +113,6 @@ class Tokenizer:
 
         if len(merge_rules) != 0:
             self.merge_rules = merge_rules
-
-    # ---------------------------------------------------
 
     def build_token_id_mapping(self) -> None:
         """Assigns a unique ID to each token of vocabulary and saves them in dictionary format in Tokenizer.token_to_id & Tokenizer.id_to_token"""
@@ -149,9 +133,6 @@ class Tokenizer:
 
         self.token_to_id = token_to_id
         self.id_to_token = id_to_token
-
-
-    # ---------------------------------------------------
     
     def get_vocab_size(self) -> int:
         """Returns the size of vocabulary."""
@@ -160,15 +141,12 @@ class Tokenizer:
             return len(list(self.id_to_token.values()))
         else:
             return len(self.special_tokens + self.allowed_chars)
-
-
-    # ---------------------------------------------------
     
     def fit(self, text_to_fit:str, num_merge_rules:int) -> None:
-        """This function trains the tokenizer with the given text.\n
-        Set num_merge_rules to: -1 to let tokenizer decide the num_merges, 0 to set tokenizer to character based mode, or an integer:num_merge_rules to train tokenizer for num_merge_rules times.\n
-        NOTE: It is generally not advisable to continue with the least frequent pair merging repeatedly.Therefore, you should avoid setting a very high number of merges and specifying an excessively large value for num_merge_rules.\n
-        WARNING: THIS FUNCTION CAN BE USED FOR ONLY ONE TIME; THEREFORE TOKENIZER IS ONE-TIME-TRAINABLE."""
+        """ ## This function trains the tokenizer with the given text.\n
+        SET num_merge_rules TO: \n -1 to let tokenizer decide the num_merges itself, 0 to set tokenizer to character based mode, or an integer:num_merge_rules to train tokenizer for num_merge_rules times.\n
+        ##### NOTE: It is generally not advisable to continue merging all down to the least frequent pair. Therefore, you should avoid setting a very high number of merges and specifying an excessively large value for num_merge_rules.\n
+        ### WARNING: THIS FUNCTION IS DESIGNED TO BE USED FOR ONLY ONE TIME; THEREFORE TOKENIZER IS ONE-TIME-TRAINABLE."""
 
         if not self.is_trained:
             text_to_fit = self.normalize(text_to_fit)
@@ -197,13 +175,12 @@ class Tokenizer:
 
                 self.is_trained = True
 
-            elif num_merge_rules <= 1:
+            elif num_merge_rules >= 1:
                 self.create_freq_vocab(text_to_fit)
                 self.create_merge_rules(num_merge_rules)
                 self.build_token_id_mapping()
 
                 self.is_trained = True
-
             
         else:
             raise ValueError(
@@ -211,8 +188,6 @@ class Tokenizer:
                 "You cannot retrain a tokenizer that is already fitted. "
                 "Please create a new instance of the tokenizer or reset it by calling Tokenizer.reset() function."
             )
-
-    # ---------------------------------------------------
 
     def reset(self) -> None:
         """Resets tokenizer parameters to default and makes it trainable again (congigurations will not be reset)."""
@@ -222,8 +197,6 @@ class Tokenizer:
         self.token_to_id = None
         self.id_to_token = None
         self.is_trained = False
-
-    # ---------------------------------------------------
 
     def tokenize_word(self, word:str) -> list:
         """Breaks the given word into subword token strings"""
@@ -253,10 +226,7 @@ class Tokenizer:
 
         else:
             return letters
-            
-        
-    # ---------------------------------------------------
-    
+                
     def tokenize_text(self, text:str) -> list:
         """Breaks the given text into subword token strings."""
 
@@ -265,6 +235,7 @@ class Tokenizer:
 
         tokens = []
         words = text.split()
+
         for word in words:
             if self.is_special_token(word):
                 tokens.append(word)
@@ -273,13 +244,10 @@ class Tokenizer:
 
         return tokens
         
-
-    # ---------------------------------------------------
-
     def encode(self, text:str) -> list:
         """Converts(decodes) the given text into token IDs that can be used for input of model."""
-
-        tokens = self.tokenize_text(text)
+        
+        tokens = self.tokenize_text(self.normalize(text))
 
         token_ids = []
 
@@ -287,8 +255,6 @@ class Tokenizer:
             token_ids.append( self.token_to_id[str(token)] )
 
         return token_ids
-
-    # ---------------------------------------------------
 
     def decode(self, token_ids:list) -> str:
         """Converts(encodes) the given token IDs to readable text."""
@@ -303,8 +269,6 @@ class Tokenizer:
             tokens = tokens.replace(self.punctation_tokens[punc_tok], punc_tok)
 
         return tokens
-
-    # ---------------------------------------------------
 
     def save_configs(self, save_path:str, save_name:str) -> None:
         """Saves the tokenizer configurations and parametes in a json file in the given save path if it is not trained."""
@@ -329,9 +293,6 @@ class Tokenizer:
         with open(f"{save_path}/{save_name}.json", 'w', encoding='utf-8') as f:
             json.dump(configs, f, ensure_ascii=False, indent=4)
 
-
-    # ---------------------------------------------------
-
     def load_configs(self, file_path:str) -> None:
         """Loads the tokenizer configurations and parameters from the given json file."""
 
@@ -346,7 +307,6 @@ class Tokenizer:
         self.merge_rules = [tuple(pair) for pair in configs["merge_rules"]]
         self.token_to_id = configs["token_to_id"]
         self.id_to_token = {int(k): v for k, v in configs["id_to_token"].items()}
-
 
         self.WORD_END = configs["WORD_END"]
         self.special_tokens = configs["special_tokens"]
