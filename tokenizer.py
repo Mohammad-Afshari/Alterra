@@ -28,10 +28,10 @@ class Tokenizer:
         self.is_trained = False
 
     def normalize(self, text:str) -> str:
-        """This function cleans and organizes the given text, removes unwanted and unnecessary characters, and delivers it in the requested format."""
+        """Cleans and organizes the given text, removes unwanted and unnecessary characters, and delivers it in the requested format."""
 
-        # for punc_tok in self.punctation_tokens.keys():
-            # text = text.replace(punc_tok, f' {self.punctation_tokens[punc_tok]} ')
+        for punc_tok in self.punctation_tokens.keys():
+            text = text.replace(punc_tok, f' {self.punctation_tokens[punc_tok]} ')
 
         text = self.regex_rule.sub(' ', text)
 
@@ -74,8 +74,7 @@ class Tokenizer:
         return pairs
 
     def merge_vocab(self, pair:tuple) -> dict:
-        """Merges the given pair(here:most frequent pair) with every word in freq_vocab if pair exist in letters of that word
-        and returns a new freq_vocab that it's words contain pairs instead of just letters"""
+        """Merges the given pair(here:most frequent pair) with every word in freq_vocab if pair exist in letters of that word and returns a new freq_vocab that it's words contain pairs instead of just letters"""
 
         new_freq_vocab = {} # new vocab that shows the frequency of each word and it's letters are replaced by pairs
         pair_text = ''.join(pair)
@@ -98,7 +97,7 @@ class Tokenizer:
         return new_freq_vocab
 
     def create_merge_rules(self, num_merges:int) -> None:
-        """Merges most frequent pairs with Tokenizer.freq_vocab words for num_merges times."""
+        """Merges the most frequent pairs with Tokenizer.freq_vocab words for num_merges times."""
 
         merge_rules = []
 
@@ -115,7 +114,7 @@ class Tokenizer:
             self.merge_rules = merge_rules
 
     def build_token_id_mapping(self) -> None:
-        """Assigns a unique ID to each token of vocabulary and saves them in dictionary format in Tokenizer.token_to_id & Tokenizer.id_to_token"""
+        """Assigns a unique ID to each token of vocabulary and stores them in dictionary format in Tokenizer.token_to_id & Tokenizer.id_to_token"""
 
         vocab = []
         vocab += self.special_tokens
@@ -143,10 +142,10 @@ class Tokenizer:
             return len(self.special_tokens + self.allowed_chars)
     
     def fit(self, text_to_fit:str, num_merge_rules:int) -> None:
-        """ ## This function trains the tokenizer with the given text.\n
-        SET num_merge_rules TO: \n -1 to let tokenizer decide the num_merges itself, 0 to set tokenizer to character based mode, or an integer:num_merge_rules to train tokenizer for num_merge_rules times.\n
+        """ ### Trains the tokenizer with the given text.\n
+        #### SET num_merge_rules: \n -1 to let tokenizer decide the num_merges itself,0 to set tokenizer to character based mode, or an integer:num_merge_rules to train tokenizer for num_merge_rules times.\n
         ##### NOTE: It is generally not advisable to continue merging all down to the least frequent pair. Therefore, you should avoid setting a very high number of merges and specifying an excessively large value for num_merge_rules.\n
-        ### WARNING: THIS FUNCTION IS DESIGNED TO BE USED FOR ONLY ONE TIME; THEREFORE TOKENIZER IS ONE-TIME-TRAINABLE."""
+        #### WARNING: THIS FUNCTION IS DESIGNED TO BE USED FOR ONLY ONE TIME; THEREFORE TOKENIZER IS ONE-TIME-TRAINABLE."""
 
         if not self.is_trained:
             text_to_fit = self.normalize(text_to_fit)
@@ -204,26 +203,39 @@ class Tokenizer:
         letters = list(word)
         letters.append(self.WORD_END)
 
-
         if self.merge_rules:
             current_tokens = letters
-
-            for pair in self.merge_rules:
-                i=0
-
+            while True:
                 new_tokens = []
 
-                while i < len(current_tokens):
-                    if ( i+1 < len(current_tokens) ) and ( pair == (current_tokens[i], current_tokens[i+1]) ):
-                        new_tokens.append("".join(pair))
-                        i+=2
+                k=0
+                possible_pairs = []
+                while k < len(current_tokens):
+                    if k+1 == len(current_tokens):
+                        possible_pairs.append([current_tokens[k]])
+                        k+=1
                     else:
-                        new_tokens.append(current_tokens[i])
-                        i+=1
+                        possible_pairs.append([current_tokens[k], current_tokens[k+1]])
+                        k+=2
 
-                current_tokens = new_tokens
+                if len(possible_pairs) != 1:
+                    for pair in possible_pairs:
+                        if tuple(pair) in self.merge_rules:
+                            new_tokens.append("".join(pair))
+                        else:
+                            if pair != ['</w>']:
+                                new_tokens += pair
+                            else:
+                                new_tokens += pair
+
+                    if current_tokens != new_tokens:
+                        current_tokens = new_tokens
+                    elif current_tokens == new_tokens:
+                        break
+                else:
+                    break
             return current_tokens
-
+        
         else:
             return letters
                 
@@ -245,7 +257,7 @@ class Tokenizer:
         return tokens
         
     def encode(self, text:str) -> list:
-        """Converts(decodes) the given text into token IDs that can be used for input of model."""
+        """Converts(encodes) the given text into token IDs that can be used for input of model."""
         
         tokens = self.tokenize_text(self.normalize(text))
 
@@ -257,7 +269,7 @@ class Tokenizer:
         return token_ids
 
     def decode(self, token_ids:list) -> str:
-        """Converts(encodes) the given token IDs to readable text."""
+        """Converts(decodes) the given token IDs to readable text."""
 
         tokens = []
         for id in token_ids:
