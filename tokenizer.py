@@ -9,7 +9,7 @@ class Tokenizer:
     def __init__(self, regex_rule:any=None , special_tokens:list=None, allowed_chars:list=None):
 
         # CONFIGURATIONS
-        self.allowed_chars = allowed_chars or list("""ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:()[]{}<>+-=*/!?"'~#%&_$""")
+        self.allowed_chars = allowed_chars or list("""ضصثقفغعهخحجچپشسیبلاتنمکگظطزرذدئوABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:()[]{}<>+-=*/!?"'~#%&_$""")
         self.regex_rule = regex_rule or re.compile(f'[^{re.escape( ''.join(self.allowed_chars) )}]')
         self.WORD_END = '</w>'
         self.special_tokens = special_tokens or ['<USER_START>', '<USER_END>', '<AI_START>', '<AI_END>', '<CHAT_START>', '<CHAT_END>', '<COT_START>', '<COT_END>', '<PAD>', '<UNK>', self.WORD_END]
@@ -254,6 +254,13 @@ class Tokenizer:
             else:
                 tokens.extend(self.tokenize_word(word))
 
+        # for i in tqdm(range(len(words))):
+        #     if self.is_special_token(words[i]):
+        #         tokens.append(words[i])
+        #     else:
+        #         tokens.extend(self.tokenize_word(words[i]))
+
+
         return tokens
         
     def encode(self, text:str) -> list:
@@ -266,7 +273,7 @@ class Tokenizer:
         for token in tokens:
             token_ids.append( self.token_to_id[str(token)] )
 
-        return token_ids
+        return token_ids[:-1]
 
     def decode(self, token_ids:list) -> str:
         """Converts(decodes) the given token IDs to readable text."""
