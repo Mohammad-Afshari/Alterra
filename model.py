@@ -35,8 +35,7 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = self.pe[:x.size(0)]
-        return self.dropout(x)
+        return self.dropout(self.pe[:x.size(0)])
 
 class AttentionHead(nn.Module):
     def __init__(self, n_embed, window_size, head_size, dropout_value):
@@ -105,7 +104,6 @@ class TransformerModel(nn.Module):
         self.window_size = window_size
 
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
-        # self.position_embedding_table = nn.Embedding(window_size, n_embed)
         self.positional_encoding_table = PositionalEncoding(n_embed, window_size, dropout_value)
         self.blocks = nn.Sequential(*[Block(n_embed, num_heads, window_size, head_size, dropout_value) for _ in range(num_transformer_blocks)])
         self.ln_f = nn.LayerNorm(n_embed)
@@ -134,20 +132,23 @@ class TransformerModel(nn.Module):
 
         return logits, loss
 
-    def generate(self, idx, max_new_tokens):
+    def generate(self, idx, max_new_tokens, temperature=0.8):
         # idx is (B, T) array of indices in the current context
-        for _ in tqdm(range(max_new_tokens)):
-            # crop idx to the last window_size tokens
+        for _ in range(max_new_tokens):
+            # takes the last window_size tokens
             idx_cond = idx[:, -self.window_size:]
-            # get the predictions
+
             logits, loss = self(idx_cond)
-            # focus only on the last time step
+            # get the output of the model for the input
             logits = logits[:, -1, :]  # becomes (B, C)
-            # apply softmax to get probabilities
-            # probs = F.softmax(logits, dim=-1)  # (B, C)
-            # sample from the distribution
-            # idx_next = torch.multinomial(probs, num_samples=1)  # (B, 1)
-            idx_next = torch.argmax(logits,dim=-1, keepdim=True)  # (B, 1)
-            # append sampled index to the running sequence
+
+            # applies the temprature and calculates the probs for each token in vocab
+            logits = logits / temperature
+            probs = F.softmax(logits, dim=-1)
+
+            # Given the prob of each token, takes a token 
+            idx_next = torch.multinomial(probs, num_samples=1)
+
+            # concatenates the previous tokens with the generated token
             idx = torch.cat((idx, idx_next), dim=1)  # (B, T+1)
         return idx
