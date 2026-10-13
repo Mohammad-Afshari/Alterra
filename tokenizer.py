@@ -34,10 +34,8 @@ class Tokenizer:
 
     def normalize(self, text:str) -> str:
         """Cleans and organizes the given text, removes unwanted and unnecessary characters, and delivers it in the requested format."""
-
         for punc_tok in self.punctation_tokens.keys():
             text = text.replace(punc_tok, f' {self.punctation_tokens[punc_tok]} ')
-
         text = self.regex_rule.sub(' ', text)
 
         return text
@@ -271,7 +269,6 @@ class Tokenizer:
                 tokens.append(words[i])
             else:
                 tokens.extend(self.tokenize_word(words[i]))
-
 
         return tokens
         
