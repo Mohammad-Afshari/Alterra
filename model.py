@@ -104,7 +104,8 @@ class TransformerModel(nn.Module):
         self.window_size = window_size
 
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
-        self.positional_encoding_table = PositionalEncoding(n_embed, window_size, dropout_value)
+        self.position_embedding_table = nn.Embedding(window_size, n_embed)
+        # self.positional_encoding_table = PositionalEncoding(n_embed, window_size, dropout_value)
         self.blocks = nn.Sequential(*[Block(n_embed, num_heads, window_size, head_size, dropout_value) for _ in range(num_transformer_blocks)])
         self.ln_f = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size)
@@ -114,9 +115,9 @@ class TransformerModel(nn.Module):
         
         # idx and targets are both (B,T) tensors
         tok_emb = self.token_embedding_table(idx) # (B,T,C) 
-        # pos_emb = self.position_embedding_table(torch.arange(T))
-        pos_enc = self.positional_encoding_table(idx)
-        x = tok_emb + pos_enc
+        pos_emb = self.position_embedding_table(torch.arange(T))
+        # pos_enc = self.positional_encoding_table(idx)
+        x = tok_emb + pos_emb
         x = self.blocks(x)
         logits = self.lm_head(x) #(B,T,vocab_size)
         
