@@ -9,8 +9,13 @@ class Tokenizer:
     def __init__(self, regex_rule:any=None , special_tokens:list=None, allowed_chars:list=None):
 
         # CONFIGURATIONS
-        self.allowed_chars = allowed_chars or list("""ضصثقفغعهخحجچپشسیبلاتنمکگظطزرذدئوABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:()[]{}<>+-=*/!?"'~#%&_$""")
-        self.regex_rule = regex_rule or re.compile(f'[^{re.escape( ''.join(self.allowed_chars) )}]')
+        self.allowed_chars = allowed_chars
+
+        if allowed_chars:
+            self.regex_rule = re.compile(f'[^{re.escape( ''.join(self.allowed_chars) )}]')
+        else:
+            self.regex_rule = None
+
         self.WORD_END = '</w>'
         self.special_tokens = special_tokens or ['<USER_START>', '<USER_END>', '<AI_START>', '<AI_END>', '<CHAT_START>', '<CHAT_END>', '<COT_START>', '<COT_END>', '<PAD>', '<UNK>', self.WORD_END]
         self.punctation_tokens = {
@@ -148,7 +153,6 @@ class Tokenizer:
         #### WARNING: THIS FUNCTION IS DESIGNED TO BE USED FOR ONLY ONE TIME; THEREFORE TOKENIZER IS ONE-TIME-TRAINABLE."""
 
         if not self.is_trained:
-            text_to_fit = self.normalize(text_to_fit)
 
             if not isinstance(num_merge_rules, int):
                 raise TypeError("num_merge_rules must be an integer.")
@@ -156,7 +160,15 @@ class Tokenizer:
             if num_merge_rules < -1:
                 raise ValueError("num_merge_rules mus be -1, 0, or a positive integer.")
 
+
+            if not self.allowed_chars:
+                self.allowed_chars = sorted(set(text_to_fit))
+                self.regex_rule = re.compile(f'[^{re.escape( ''.join(self.allowed_chars) )}]')
+            text_to_fit = self.normalize(text_to_fit)
+
+
             if num_merge_rules == 0:
+
                 self.build_token_id_mapping()
 
                 self.is_trained = True
@@ -248,17 +260,17 @@ class Tokenizer:
         tokens = []
         words = text.split()
 
-        for word in words:
-            if self.is_special_token(word):
-                tokens.append(word)
-            else:
-                tokens.extend(self.tokenize_word(word))
-
-        # for i in tqdm(range(len(words))):
-        #     if self.is_special_token(words[i]):
-        #         tokens.append(words[i])
+        # for word in words:
+        #     if self.is_special_token(word):
+        #         tokens.append(word)
         #     else:
-        #         tokens.extend(self.tokenize_word(words[i]))
+        #         tokens.extend(self.tokenize_word(word))
+
+        for i in tqdm(range(len(words))):
+            if self.is_special_token(words[i]):
+                tokens.append(words[i])
+            else:
+                tokens.extend(self.tokenize_word(words[i]))
 
 
         return tokens
@@ -273,7 +285,7 @@ class Tokenizer:
         for token in tokens:
             token_ids.append( self.token_to_id[str(token)] )
 
-        return token_ids[:-1]
+        return token_ids[:-1] if not self.merge_rules == 0 else token_ids
 
     def decode(self, token_ids:list) -> str:
         """Converts(decodes) the given token IDs to readable text."""
